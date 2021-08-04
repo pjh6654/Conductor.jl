@@ -485,7 +485,7 @@ function Compartment{Sphere}(channels::Vector{<:AbstractConductance},
         append!(eqs, [D(Iapp) ~ 0])
     elseif isparameter(stimulus)
         append!(eqs, [Iapp ~ stimulus])
-        push!(defaultmap, stimulus => holding)
+        push!(defaultmap, stimulus => ustrip(Float64, µA, holding))
         push!(params, stimulus)
     else
         push!(eqs, Iapp ~ stimulus(t,Iapp))
