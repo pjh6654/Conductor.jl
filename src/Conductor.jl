@@ -458,7 +458,7 @@ function Compartment{Sphere}(channels::Vector{<:AbstractConductance},
                              capacitance::SpecificCapacitance = 1µF/cm^2,
                              V0::Voltage = -65mV,
                              holding::Current = 0nA,
-                             stimulus::Union{Function,Nothing} = nothing,
+                             stimulus::Union{Num,Function,Nothing} = nothing,
                              aux::Union{Nothing, Vector{AuxConversion}} = nothing)
 
     Vₘ = MembranePotential()
@@ -483,6 +483,10 @@ function Compartment{Sphere}(channels::Vector{<:AbstractConductance},
     # construction; with its own data type)
     if stimulus == nothing
         append!(eqs, [D(Iapp) ~ 0])
+    elseif isparameter(stimulus)
+        append!(eqs, [Iapp ~ stimulus])
+        push!(defaultmap, stimulus => holding)
+        push!(params, stimulus)
     else
         push!(eqs, Iapp ~ stimulus(t,Iapp))
     end
