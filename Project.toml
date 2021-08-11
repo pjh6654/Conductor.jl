@@ -1,7 +1,7 @@
 name = "Conductor"
 uuid = "d194a933-43b5-4953-818b-974a45c81e67"
 authors = ["Wiktor Phillips <wsphillips@gmail.com>"]
-version = "0.0.1"
+version = "0.0.2"
 
 [deps]
 Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
@@ -20,4 +20,4 @@ Setfield = "0.7"
 SymbolicUtils = "0.13"
 Symbolics = "1.4"
 Unitful = "1.9"
-julia = "1.5"
+julia = "1.5, 1.6"
