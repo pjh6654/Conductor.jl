@@ -13,62 +13,21 @@ struct IonChannel <: AbstractConductance
     conducts::DataType # ion permeability
     inputs::Vector{Num} # cell states dependencies (input args to kinetics); we can infer this
     params::Vector{Num}
-    kinetics::Vector{<:AbstractGatingVariable} # gating functions; none = passive channel
-    sys::Union{ODESystem, Nothing} # symbolic system
-end
-
-function _conductance(::Type{ODESystem},gbar_val::T, gate_vars::Vector{<:AbstractGatingVariable};
-                      passive::Bool = false, null_init::Bool = false,
-                      name::Symbol) where {T <: Real}
-
-    inputs = Set{Num}()
-    states = Set{Num}()
-    eqs = Equation[]
-    # retrieve all variables present in the RHS of kinetics equations
-    # g = total conductance (e.g. g(m,h) ~ ̄gm³h)
-    if passive
-        params = @parameters g
-        defaultmap = Pair[g => gbar_val]
-    else
-        gates = Set{Num}(getsymbol(x) for x in gate_vars)
-        @variables g(t)
-        push!(states, g)
-        params = @parameters gbar
-        defaultmap = Pair[gbar => gbar_val]
-
-        for i in gate_vars
-            syms = value.(get_variables(getequation(i)))
-            for j in syms
-                if j ∉ gates
-                    isparameter(j) ? push!(params, j) : push!(inputs, j)
-                end
-            end
-        end
-        union!(states, gates, inputs)
-        push!(eqs, g ~ gbar * prod(hasexponent(x) ? getsymbol(x)^x.p : getsymbol(x) for x in gate_vars))
-        append!(eqs, getequation(x) for x in gate_vars)
-        if null_init
-            foreach(gate_vars) do x; defaultmap = _merge(defaultmap, Dict(getsymbol(x)=>0.0)) end
-        else
-            foreach(gate_vars) do x; defaultmap = _merge(defaultmap, getdefaults(x)) end
-        end
-    end
-    system = ODESystem(eqs, t, states, params; defaults = defaultmap, name = name)
-    return (collect(inputs), params, system)
+    kinetics::Union{AbstractKinetics,Vector{<:AbstractKinetics}} # kinetics equations
+    sys::Union{AbstractSystem, Nothing} # symbolic system
 end
 
 # General purpose constructor
 function IonChannel(conducts::Type{I},
-                    gate_vars::Vector{<:AbstractGatingVariable},
+                    gate_vars::Union{K,Vector{<:K}},
                     max_g::SpecificConductance = 0mS/cm^2;
-                    passive::Bool = false, name::Symbol) where {I <: Ion}
+                    name::Symbol,kwargs...) where {I <: Ion, K<:AbstractKinetics}
     # TODO: Generalize to other possible units (e.g. S/F)
-    sys_type = passive ? ODESystem : subtype(eltype(gate_vars))
-    @assert sys_type <: AbstractSystem "All gate variables must contain an AbstractSystem!"
-    @assert ~isequal(sys_type,AbstractSystem) "All gate variables must contain the same AbstracSystem subtype!"
+    check_kinetics(gate_vars)
+    sys_type = systemtype(gate_vars)
 
     gbar_val = ustrip(Float64, mS/cm^2, max_g)
-    (inputs, params, system) = _conductance(sys_type,gbar_val, gate_vars, passive = passive, name = name)
+    (inputs, params, system) = _conductance(sys_type,gbar_val, gate_vars; name = name, kwargs...)
     return IonChannel(max_g, conducts, inputs, params, gate_vars, system)
 end
 
@@ -88,9 +47,9 @@ end
 
 # Alias for ion channel with static conductance
 function PassiveChannel(conducts::Type{I}, max_g::SpecificConductance = 0mS/cm^2;
+                        sys_type::Type{<:AbstractSystem} = ODESystem,
                         name::Symbol = Base.gensym(:Leak)) where {I <: Ion}
-    gate_vars = AbstractGatingVariable[]
-    return IonChannel(conducts, gate_vars, max_g; name = name, passive = true)
+    return IonChannel(conducts, Gate{sys_type}[], max_g; name = name, passive = true)
 end
 
 struct SynapticChannel <: AbstractConductance
@@ -99,25 +58,27 @@ struct SynapticChannel <: AbstractConductance
     reversal::Num
     inputs::Vector{Num}
     params::Vector{Num}
-    kinetics::Vector{<:AbstractGatingVariable}
+    kinetics::Vector{<:AbstractGate}
     sys::Union{ODESystem, Nothing}
 end
 
-function SynapticChannel(conducts::Type{I}, gate_vars::Vector{<:AbstractGatingVariable},
+function SynapticChannel(conducts::Type{I}, gate_vars::Vector{<:AbstractGate},
                          reversal::Num, max_g::ElectricalConductance = 0mS;
-                         passive::Bool = false, name::Symbol) where {I <: Ion}
+                         name::Symbol, kwargs...) where {I <: Ion}
 
-    sys_type = passive ? ODESystem : subtype(eltype(gate_vars))
-    @assert sys_type <: AbstractSystem "All gate variables must contain an AbstractSystem!"
-    @assert ~isequal(sys_type,AbstractSystem) "All gate variables must contain the same AbstracSystem subtype!"
+    check_kinetics(gate_vars)
+    sys_type = systemtype(gate_vars)
+
     gbar_val = ustrip(Float64, mS, max_g)
-    (inputs, params, system) = _conductance(sys_type, gbar_val, gate_vars, passive = passive, null_init = true, name = name)
+    (inputs, params, system) = _conductance(sys_type, gbar_val, gate_vars; null_init = true, name = name, kwargs...)
     return SynapticChannel(max_g, conducts, reversal, inputs, params, gate_vars, system)
 end
 
 function GapJunction(conducts::Type{I}, reversal::Num, max_g::ElectricalConductance = 0mS;
-                     passive::Bool = false, name::Symbol) where {I <: Ion}
-    SynapticChannel(conducts, AbstractGatingVariable[], reversal, max_g, passive = true, name)
+                     passive::Bool = false,
+                     sys_type::Type{<:AbstractSystem} = ODESystem,
+                     name::Symbol) where {I <: Ion}
+    SynapticChannel(conducts, Gate{sys_type}[], reversal, max_g, name; passive = true)
 end
 
 function (chan::SynapticChannel)(newgbar::ElectricalConductance)
