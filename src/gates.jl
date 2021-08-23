@@ -25,7 +25,7 @@ function Gate(::Type{SteadyStateTau}, name::Symbol, ss::Num, tau::Num, p::Float6
             # Extra parameters are made unique to the gate ie. x => m₊x
             par = renamespace(name,symbol)
             # substitute in unique parameter
-            alpha, beta = substitute.([alpha,beta], (symbol => par))
+            ss, tau = substitute.([ss,tau], (symbol => par))
             # set parameter default
             haskey(defaults,symbol) ? push!(pars_defaults, par => defaults[symbol]) : nothing
             push!(pars,par)
@@ -35,11 +35,11 @@ function Gate(::Type{SteadyStateTau}, name::Symbol, ss::Num, tau::Num, p::Float6
         [Reaction(ss/tau,nothing,[sym]),
         Reaction(1/tau,[sym],nothing)],
         t,[sym],pars;
-        defaults=_merge(Dict(sym=>ss),pars_defaults),
+        defaults=pars_defaults,
         name=name
     )
     sys = convert(sys_type,rn)
-    Gate(sys,p)
+    Gate(sys,sym,ss,p)
 end
 
 function Gate(::Type{AlphaBetaRates}, name::Symbol, alpha::Num, beta::Num, p::Float64;
@@ -64,11 +64,11 @@ function Gate(::Type{AlphaBetaRates}, name::Symbol, alpha::Num, beta::Num, p::Fl
         [Reaction(alpha,nothing,[sym]),
         Reaction(alpha+beta,[sym],nothing)],
         t,[sym],pars;
-        defaults=_merge(Dict(sym=>ss),pars_defaults),
+        defaults=pars_defaults,
         name=name
     )
     sys = convert(sys_type,rn)
-    Gate(sys,p)
+    Gate(sys,sym,ss,p)
 end
 
 Gate(t::Type{SteadyStateTau}, name::Symbol, alpha::Num, beta::Num, p::Real; kwargs...) =
@@ -108,4 +108,41 @@ function Gate(::Type{AlphaBetaRates}; p = one(Float64),
     else
         throw("invalid keywords")
     end
+end
+
+function _conductance(::Type{ODESystem},gbar_val::T, gate_vars::Vector{<:AbstractGate};
+                      passive::Bool = false, null_init::Bool = false,
+                      name::Symbol) where {T <: Real}
+
+    inputs = Set{Num}()
+    states = Set{Num}()
+    eqs = Equation[]
+    # retrieve all variables present in the RHS of kinetics equations
+    # g = total conductance (e.g. g(m,h) ~ ̄gm³h)
+    if passive
+        params = @parameters g
+        defaultmap = Pair[g => gbar_val]
+    else
+        gates = Set{Num}(get_output(x) for x in gate_vars)
+        @variables g(t)
+        push!(states, g)
+        params = @parameters gbar
+        defaultmap = Pair[gbar => gbar_val]
+
+        for i in gate_vars
+            syms = value.(get_variables(only(equations(i))))
+            for j in syms
+                if j ∉ gates
+                    isparameter(j) ? push!(params, j) : push!(inputs, j)
+                end
+            end
+        end
+        union!(states, gates, inputs)
+        push!(eqs, g ~ gbar * prod(hasexponent(x) ? get_output(x)^x.p : get_output(x) for x in gate_vars))
+        append!(eqs, only(equations(x)) for x in gate_vars)
+        append!(defaultmap, get_output(x) => (hassteadystate(x) && !null_init) ? x.ss : 0.0 for x in gate_vars) # fallback to zero
+        for x in gate_vars; defaultmap = _merge(defaultmap, defaults(x)) end
+    end
+    system = ODESystem(eqs, t, states, params; defaults = defaultmap, name = name)
+    return (collect(inputs), params, system)
 end
