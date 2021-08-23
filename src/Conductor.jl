@@ -1,18 +1,50 @@
 module Conductor
 
-using Catalyst, ModelingToolkit, Unitful, Unitful.DefaultSymbols, InteractiveUtils
-using IfElse, Symbolics, SymbolicUtils, Setfield
+using Catalyst,
+      ModelingToolkit,
+      Unitful,
+      Unitful.DefaultSymbols,
+      InteractiveUtils,
+      IfElse,
+      Symbolics,
+      SymbolicUtils,
+      Setfield
 
-import Symbolics: get_variables, Symbolic, value, tosymbol, VariableDefaultValue, wrap
-import ModelingToolkit: _merge, renamespace, toparam, isparameter, Equation, defaults, AbstractSystem
+import Symbolics:
+    get_variables,
+    Symbolic, value,
+    tosymbol,
+    VariableDefaultValue,
+    wrap
+
+import ModelingToolkit:
+    _merge,
+    renamespace,
+    toparam,
+    isparameter,
+    Equation,
+    defaults,
+    AbstractSystem,
+    get_eqs,
+    get_states,
+    get_observed,
+    get_defaults,
+    get_ps,
+    get_systems
+
+import Unitful:
+    Time,
+    Voltage,
+    Current,
+    Molarity,
+    ElectricalConductance
+
 import SymbolicUtils: FnType
-
-import Unitful: Time, Voltage, Current, Molarity, ElectricalConductance
 import Unitful: mV, mS, cm, µF, mF, µm, pA, nA, mA, µA, ms, mM, µM
-
 import Base: show, display
 
-export Gate, AlphaBetaRates, SteadyStateTau, IonChannel, PassiveChannel, SynapticChannel
+export Gate, AlphaBetaRates, SteadyStateTau, Markov
+export IonChannel, PassiveChannel, SynapticChannel
 export EquilibriumPotential, Equilibrium, Equilibria, MembranePotential, MembraneCurrent
 export AuxConversion, D, Network
 export Soma, Simulation, Concentration, IonConcentration
@@ -45,7 +77,9 @@ end
 @derived_dimension ConductancePerFarad 𝐓^-1 # S/F cancels out to 1/s; perhaps find a better abstract type?
 
 include("ions.jl")
+include("kinetics.jl")
 include("gates.jl")
+include("markov.jl")
 include("channels.jl")
 include("compartments.jl")
 include("networks.jl")
