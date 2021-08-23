@@ -1,16 +1,12 @@
-# Gating variables (as an interface)
-abstract type AbstractGatingVariable end
+abstract type AbstractGate <: AbstractKinetics end
 
-# TODO: hassteadystate(x::AbstractGatingVariable) = hasfield(typeof(x), :ss) ? !(isnothing(x.ss)) : false
-hasexponent(x::AbstractGatingVariable) = hasfield(typeof(x), :p) ? x.p !== one(Float64) : false
-getsymbol(x::AbstractGatingVariable) = only(states(x.sys))
-getequation(x::AbstractGatingVariable) = only(equations(x.sys))
-getdefaults(x::AbstractGatingVariable) = defaults(x.sys)
-subtype(x::AbstractGatingVariable) = typeof(x.sys)
-subtype(x::Type{G}) where G<:AbstractGatingVariable = fieldtype(G,:sys)
+hasexponent(x::AbstractGate) = hasfield(typeof(x), :p) ? x.p !== one(Float64) : false
+get_output(x::AbstractGate) = x.state
 
-struct Gate{S<:AbstractSystem} <: AbstractGatingVariable
+struct Gate{S<:AbstractSystem} <: AbstractGate
     sys::S # symbolic system
+    state::Num
+    ss::Union{Nothing,Num}
     p::Float64 # optional exponent (defaults to 1)
 end
 
