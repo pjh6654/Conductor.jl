@@ -103,6 +103,7 @@ end
 include("ions.jl")
 include("gates.jl")
 include("channels.jl")
+include("markov.jl")
 include("compartments.jl")
 include("networks.jl")
 include("io.jl")
